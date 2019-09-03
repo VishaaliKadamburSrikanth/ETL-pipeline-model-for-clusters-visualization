@@ -1,0 +1,72 @@
+var express = require('express');
+var fs = require('fs');
+var request = require('request');
+var cheerio = require('cheerio');
+var app = express();
+
+app.get('/scrape', function(req, res) {
+
+  url = 'https://parks.novascotia.ca/content/parks-by-region';
+  prefixURL = 'https://parks.novascotia.ca/';
+  request(url, function(error, response, html) {
+    if (!error) {
+      var $ = cheerio.load(html);
+
+      var title, release, rating;
+      var json = {
+        title: "",
+        release: "",
+        rating: ""
+      };
+
+      $('li.accordion').each((i, obj) => {
+        var header = $(obj).children().first().text().trim();
+        var data1 = $(obj).children().last().children().next().text(); //console.log(data1);
+        $(obj).children().last().children().next().each((i, ele) => {
+          var place = $(ele).text().trim();
+          var link = $(ele).children().attr("href");
+          var nextURL;
+          if (link.includes("http")) {
+            nextURL = link
+          } else {
+            nextURL = prefixURL + link
+          }
+
+          request(nextURL, (error1, response1, html1) => {
+            if (!error1) {
+              var $1 = cheerio.load(html1);
+              var addr;
+              if (nextURL.includes("#")) {
+                var id = nextURL.split("#")[1];
+                if ($1('#' + id).length != 0) {
+                  addr = $1('#' + id).parent().find('div:nth-child(5)').text().split(":")[1].replace(/,/g, ";").trim()
+                }
+              } else if ($1("span strong").length !=0 ) {
+                addr = $1("span strong").eq(1).text().replace(/,/g, ";").trim()
+              } else {
+                addr = $1(".parks-guide__container > div:nth-child(2)").text().split(":")[1].replace(/,/g, ";").trim()
+
+              }
+              if(addr == "") {
+                console.log("hii");
+              }
+              var data = header + "," + place + "," + addr + "\n";
+              fs.appendFile('parks.csv', data, function(err) {
+                if (err) throw err;
+              });
+            }
+          })
+        });
+      });
+    }
+
+
+
+    res.send('Check your Folder..!')
+
+  });
+});
+
+app.listen('8081');
+console.log('Visit http://localhost:8081/scrape');
+exports = module.exports = app;
